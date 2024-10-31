@@ -1,17 +1,20 @@
-'''EXPLICA TU IMPORTACIÓN DE SQLite3'''
+'''Imports'''
 import sqlite3
 import random
 
+# TODO -----> | EXTRAER LOS DATOS NECESARIOS | AÑADIR DATOS A TABLA | INYECCION DATOS |
+
+
 
 def create_db():
-    '''Funcion para crear la base de datos'''
+    '''Creation of db'''
     conn = sqlite3.connect("rps.db")
     conn.commit()
     conn.close()
 
 
 def create_table_user():
-    '''Creamos la tabla usuarios'''
+    '''Creation of match database user'''
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     cursor.execute(
@@ -29,7 +32,7 @@ def create_table_user():
 
 
 def create_table_match():
-    '''Creamos la tabla partidas'''
+    '''Creation of match database table'''
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     cursor.execute(
@@ -48,21 +51,26 @@ def create_table_match():
 
 
 def start_match():
-    '''Inicio del juego'''
+    '''Start of the game'''
     #? 1. INTRODUCCIÓN AL JUEGO
     print("\n******* Rock Paper Scissors *******\n")
-    user = input("Hi! What's your name? ").lower()
+    user = input("Hi! What's your name? ").lower() 
     email = input("Please, tell us your email ")
-    print("\nGreat! You'll be playing against the machine")
+    return user, email
 
 
 def match():
-    '''Lógica de una ronda'''
+    '''Logic for one match (3 rounds)'''
     #? 2. ELECCIÓN DEL USUARIO
+    print("\nGreat! You'll be playing against the machine")
     options = ['R', 'P', 'S'] #* Establecemos las opciones que tiene la máquina
     round_results = []
     score = 0
+    win = 0
+    fail = 0
+    round = 1   
     for _ in range (3):
+        print(f'***** ROUND {round} *****\n')
         while True:
             try:
                 move = input("Please choose an option: Rock (R), Paper (P) or Scissors (S) ").upper()
@@ -87,31 +95,61 @@ def match():
             print(f'{move} vs {computer_choice}. Machine wins\n')
             result = 'Fail '
         round_results.append(result)
+        round += 1
     print("\n******* RESULTS *******\n")
     print(f'The results are {round_results}. Your score is {score}\n')
-
+    if score >= 2:
+        win += 1
+        print("You won de game!!!")
+    else:
+        fail += 1
+        print("The machine has won ")
+    return win, fail, move
 
 def end_match():
-    '''dsf'''
+    '''Logic for the end of the game, deciding whether to play another game or not'''
+    n_match = 0
     while True:
         try:
             other_match = input('Do want to play again? Yes (Y) or No (N): ').upper()
             ['Y', 'N'].index(other_match)
-            match()
+            if other_match == 'Y':
+                n_match += 1
+                match()
         except ValueError:
             print("That is not an option. Try again")
         else:
             if other_match == 'N':
+                n_match += 1
                 print('Thanks')
                 break
-    
+    return n_match
 
+
+def data_user(user, email):
+    '''Intento de insertar datos del usuario a la tabla users'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+                       INSERT INTO users (user, email) 
+                       VALUES (?, ?) 
+                       ''', (user, email))
+        conn.commit()
+        print('User and email register correctly')
+    except sqlite3.IntegrityError:
+        print (f'Hi {user}')
+    finally:
+        conn.close()
+
+    
 
 
 if __name__ == "__main__":
     #create_db()
     #create_table_user()
     #create_table_match()
-    start_match()
+    user, email = start_match()
     match()
-    end_match()
+    n_match = end_match()
+    #data_user(user, email)

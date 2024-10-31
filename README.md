@@ -17,7 +17,7 @@
   [X] Condiciones de victoria
   [X] Bucle condiciones
   [X] Deben jugar 3 rondas
-  [] Preguntar si nueva partida
+  [X] Preguntar si nueva partida
 
 - Report (SQLite)
   [] Nº Partidas jugadas
