@@ -3,10 +3,10 @@
 # Realizar un "Piedra, papel o tijera" Humano vs Máquina
 
 - SQLite
-  [] Nombre y correo del usuario
-  [] Nº Partidas
-  [] Nº Rondas----> max 3
-  [] Nº Partidas ganadas y perdidas
+  [X] Nombre y correo del usuario
+  [X] Nº Partidas
+  [X] Nº Rondas----> max 3
+  [X] Nº Partidas ganadas y perdidas
   [] Mejor y peor jugada
   [] Repensar lo de results
 
