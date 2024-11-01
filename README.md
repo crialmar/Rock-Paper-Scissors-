@@ -7,7 +7,7 @@
   [X] Nº Partidas
   [X] Nº Rondas----> max 3
   [X] Nº Partidas ganadas y perdidas
-  [] Mejor y peor jugada
+  [X] Mejor y peor jugada
   [X] Repensar lo de results
 
 - Python

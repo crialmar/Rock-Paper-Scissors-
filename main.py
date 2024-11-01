@@ -2,9 +2,6 @@
 import sqlite3
 import random
 
-# TODO -----> | EXTRAER LOS DATOS NECESARIOS | AÑADIR DATOS A TABLA | INYECCION DATOS |
-# TODO -----> win/ fail no se hace bien la cuenta si se repire varias veces, n_match sí
-
 
 def create_db():
     '''Creation of db'''
@@ -77,7 +74,7 @@ def start_match():
     return user, email
 
 
-def match():
+def match(user):
     '''Logic for one match (3 rounds)'''
     #? 2. ELECCIÓN DEL USUARIO
     print("\nGreat! You'll be playing against the machine")
@@ -128,10 +125,79 @@ def match():
         fail += 1
         match_final.append('Fail')
         print("The machine has won\n")
+    data_match(round_n, user, match_final)
+    get_id_match()
+    data_round(round_results, move_human)
     return win, fail, round_n, round_results, move_human, match_final
 
 
-def end_match():
+def data_match(round, user, match_final):
+    '''Insert data to db match table---> user_id, rounds, results, move'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id FROM users WHERE user = ?", (user,))
+        user_id_result = cursor.fetchone()
+        if user_id_result is None:
+            print("User not found")
+            return
+        user_id = user_id_result[0]
+        for fin in match_final:
+            cursor.execute('''
+                       INSERT INTO match (user_id, rounds, results) 
+                       VALUES (?, ?, ?) 
+                       ''', (user_id, round, fin))
+        conn.commit()
+        print('Matchs data register correctly')
+    except sqlite3.IntegrityError:
+        print ('There was an error saving the matchs data')
+    finally:
+        conn.close()
+
+
+def get_id_match():
+    '''Get the matchs id'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''SELECT MAX(id) FROM match''')
+        match_id_ = cursor.fetchone()
+        if match_id_ is None:
+            print("Match not found")
+            conn.commit()
+            print(f'SOY EL ID DEL MATCH {match_id_}')
+        else:
+            match_id_ = match_id_[0]
+        return match_id_
+    except sqlite3.IntegrityError:
+        print ('There was an error creating or getting the match')
+    finally:
+        conn.close()
+
+
+def data_round(round_results, move_human):
+    '''Insert data to db round table---> match_id, results, move'''
+    match_id = get_id_match()
+    if match_id is None:
+        print('Error: no match created or obtained')
+    print(f'Soy el gran y único MATCH ID {match_id}')
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        for result, move in zip(round_results, move_human):
+            cursor.execute('''
+                            INSERT INTO round (match_id, results, move) 
+                            VALUES (?, ?, ?) 
+                                ''', (match_id, result, move))
+            conn.commit()
+            print('Round data register correctly')
+    except sqlite3.IntegrityError:
+        print ('There was an error saving the round data')
+    finally:
+        conn.close()
+
+
+def end_match(user):
     '''Logic for the end of the game, deciding whether to play another game or not'''
     n_match = 0
     while True:
@@ -141,7 +207,8 @@ def end_match():
             if other_match == 'Y':
                 # total_round = round + {round}
                 n_match += 1
-                match()
+                
+                match(user)
         except ValueError:
             print("That is not an option. Try again")
         else:
@@ -190,73 +257,6 @@ def data_users_game(n_match, win, fail, user):
         conn.close()
 
 
-def data_match(round, user, match_final):
-    '''Insert data to db match table---> user_id, rounds, results, move'''
-    conn = sqlite3.connect("rps.db")
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT id FROM users WHERE user = ?", (user,))
-        user_id_result = cursor.fetchone()
-        if user_id_result is None:
-            print("User not found")
-            return
-        user_id = user_id_result[0]
-        for fin in match_final:
-            cursor.execute('''
-                       INSERT INTO match (user_id, rounds, results) 
-                       VALUES (?, ?, ?) 
-                       ''', (user_id, round, fin))
-        conn.commit()
-        print('Matchs data register correctly')
-    except sqlite3.IntegrityError:
-        print ('There was an error saving the matchs data')
-    finally:
-        conn.close()
-
-
-def get_id_match(): #TODO MIRAR ESTO
-    '''Get the matchs id'''
-    conn = sqlite3.connect("rps.db")
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''SELECT MAX(id) FROM match''')
-        match_id_ = cursor.fetchone()
-        if match_id_ is None:
-            print("Match not found")
-            conn.commit()
-            print(f'SOY EL ID DEL MATCH {match_id_}')
-        else:
-            match_id_ = match_id_[0]
-        return match_id_
-    except sqlite3.IntegrityError:
-        print ('There was an error creating or getting the match')
-    finally:
-        conn.close()
-
-
-def data_round(round_results, move_human):
-    '''Insert data to db round table---> match_id, results, move'''
-    match_id = get_id_match()
-    if match_id is None:
-        print('Error: no match created or obtained')
-    print(f'Soy el gran y único MATCH ID {match_id}')
-    conn = sqlite3.connect("rps.db")
-    cursor = conn.cursor()
-    try:
-        for result, move in zip(round_results, move_human):
-            cursor.execute('''
-                            INSERT INTO round (match_id, results, move) 
-                            VALUES (?, ?, ?) 
-                                ''', (match_id, result, move))
-            conn.commit()
-            print('Round data register correctly')
-    except sqlite3.IntegrityError:
-        print ('There was an error saving the round data')
-    finally:
-        conn.close()
-
-
-
 def delete_row():
     '''Pa eliminar weas'''
     conn = sqlite3.connect("rps.db")
@@ -268,17 +268,48 @@ def delete_row():
     conn.close()
 
 
+def get_data_db(query, params=()):
+    '''Fetch data form db on the provided query and params'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    data = cursor.fetchall()
+    conn.close()
+    return data
+
+
+def get_match_total(): #TODO REVISAR ESTO 
+    '''Get all match'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''SELECT id FROM users WHERE user=?''', (user,))
+        user_id_result = cursor.fetchone
+        if user_id_result is None:
+            print('na de na')
+            return None
+        cursor.execute('''SELECT * FROM users WHERE n_match=?''', (n_match,))
+        matches = cursor.fetchall()
+        print(f'{user}s matches').upper()
+        for match in matches:
+            print(match)
+        return matches
+        
+    except sqlite3.IntegrityError:
+        print ('pos no lo conseguiste')
+    finally:
+        conn.close()
+    conn.close()
+
+
 if __name__ == "__main__":
     #create_db()
     #create_table_user()
     #create_table_match()
     #create_table_round()
     user, email = start_match()
-    win, fail, round_n, round_results, move_human, match_final = match()
-    n_match = end_match()
+    win, fail, round_n, round_results, move_human, match_final = match(user)
+    n_match = end_match(user)
     data_users_mail(user, email)
     data_users_game(n_match, win, fail, user)
-    data_match(round_n, user, match_final)
-    get_id_match()
-    data_round(round_results, move_human)
     # delete_row()
