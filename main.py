@@ -219,26 +219,27 @@ def get_id_match(): #TODO MIRAR ESTO
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     try:
-        cursor.execute('''SELECT id FROM match WHERE id = ?''', (x,))
+        cursor.execute('''SELECT MAX(id) FROM match''')
         match_id_ = cursor.fetchone()
         if match_id_ is None:
-            match_id = cursor.lastrowid
             print("Match not found")
             conn.commit()
+            print(f'SOY EL ID DEL MATCH {match_id_}')
         else:
-            match_id = match_id[0]
-        return match_id
+            match_id_ = match_id_[0]
+        return match_id_
     except sqlite3.IntegrityError:
         print ('There was an error creating or getting the match')
     finally:
         conn.close()
-        
+
 
 def data_round(round_results, move_human):
     '''Insert data to db round table---> match_id, results, move'''
     match_id = get_id_match()
     if match_id is None:
         print('Error: no match created or obtained')
+    print(f'Soy el gran y único MATCH ID {match_id}')
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     try:
@@ -278,5 +279,6 @@ if __name__ == "__main__":
     data_users_mail(user, email)
     data_users_game(n_match, win, fail, user)
     data_match(round_n, user, match_final)
+    get_id_match()
     data_round(round_results, move_human)
     # delete_row()
