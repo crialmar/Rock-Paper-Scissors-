@@ -8,7 +8,7 @@
   [X] Nº Rondas----> max 3
   [X] Nº Partidas ganadas y perdidas
   [] Mejor y peor jugada
-  [] Repensar lo de results
+  [X] Repensar lo de results
 
 - Python
   [X] Input nombre usuario y correo

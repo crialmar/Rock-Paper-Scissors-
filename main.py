@@ -72,7 +72,7 @@ def start_match():
     '''Start of the game'''
     #? 1. INTRODUCCIÓN AL JUEGO
     print("\n******* Rock Paper Scissors *******\n")
-    user = input("Hi! What's your name? ").lower() 
+    user = input("Hi! What's your name? ").lower()
     email = input("Please, tell us your email: ")
     return user, email
 
@@ -83,14 +83,15 @@ def match():
     print("\nGreat! You'll be playing against the machine")
     options = ['R', 'P', 'S'] #* Establecemos las opciones que tiene la máquina
     round_results = []
+    move_human = []
+    match_final = []
     score = 0
-   
-    round = 0
+    round_n = 0
     for _ in range (3):
-        print(f'***** FIGHT *****\n')
+        print('***** FIGHT *****\n')
         while True:
             try:
-                move = input("Please choose an option: Rock (R), Paper (P) or Scissors (S) ").upper()
+                move = input("Choose an option: Rock (R), Paper (P) or Scissors (S) ").upper()
                 options.index(move)
             except ValueError:
                 print("That is not an option. Try again")
@@ -112,18 +113,22 @@ def match():
             print(f'{move} vs {computer_choice}. Machine wins\n')
             result = 'Fail '
         round_results.append(result)
-        round += 1
+        move_human.append(move)
+        print(move_human)
+        round_n += 1
     print("\n******* RESULTS *******\n")
     print(f'The results are {round_results}. Your score is {score}')
     win = 0
     fail = 0
     if score >= 2:
         win += 1
+        match_final.append('Win')
         print("You won the game!!!\n")
     else:
         fail += 1
+        match_final.append('Fail')
         print("The machine has won\n")
-    return win, fail, round, move
+    return win, fail, round_n, round_results, move_human, match_final
 
 
 def end_match():
@@ -185,7 +190,7 @@ def data_users_game(n_match, win, fail, user):
         conn.close()
 
 
-def data_match(round, move, user):
+def data_match(round, user, match_final):
     '''Insert data to db match table---> user_id, rounds, results, move'''
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
@@ -196,10 +201,11 @@ def data_match(round, move, user):
             print("User not found")
             return
         user_id = user_id_result[0]
-        cursor.execute('''
-                       INSERT INTO match (user_id, rounds, move) 
+        for fin in match_final:
+            cursor.execute('''
+                       INSERT INTO match (user_id, rounds, results) 
                        VALUES (?, ?, ?) 
-                       ''', (user_id, round,  move))
+                       ''', (user_id, round, fin))
         conn.commit()
         print('Matchs data register correctly')
     except sqlite3.IntegrityError:
@@ -208,27 +214,46 @@ def data_match(round, move, user):
         conn.close()
 
 
-def data_round(move, results, match): #TODO-----> PROBAR ESTE CODIGO
-    '''Insert data to db round table---> match_idresults, move'''
+def get_id_match(): #TODO MIRAR ESTO
+    '''Get the matchs id'''
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT id FROM match WHERE useid = ?", (match,))
-        match_id_result = cursor.fetchone()
-        if match_id_result is None:
+        cursor.execute('''SELECT id FROM match WHERE id = ?''', (x,))
+        match_id_ = cursor.fetchone()
+        if match_id_ is None:
+            match_id = cursor.lastrowid
             print("Match not found")
-            return
-        match_id = match_id_result[0]
-        cursor.execute('''
-                       INSERT INTO match (match_id, results, move) 
-                       VALUES (?, ?, ?) 
-                       ''', (match_id, results,  move))
-        conn.commit()
-        print('Round data register correctly')
+            conn.commit()
+        else:
+            match_id = match_id[0]
+        return match_id
+    except sqlite3.IntegrityError:
+        print ('There was an error creating or getting the match')
+    finally:
+        conn.close()
+        
+
+def data_round(round_results, move_human):
+    '''Insert data to db round table---> match_id, results, move'''
+    match_id = get_id_match()
+    if match_id is None:
+        print('Error: no match created or obtained')
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        for result, move in zip(round_results, move_human):
+            cursor.execute('''
+                            INSERT INTO round (match_id, results, move) 
+                            VALUES (?, ?, ?) 
+                                ''', (match_id, result, move))
+            conn.commit()
+            print('Round data register correctly')
     except sqlite3.IntegrityError:
         print ('There was an error saving the round data')
     finally:
         conn.close()
+
 
 
 def delete_row():
@@ -248,9 +273,10 @@ if __name__ == "__main__":
     #create_table_match()
     #create_table_round()
     user, email = start_match()
-    win, fail, round, move = match()
+    win, fail, round_n, round_results, move_human, match_final = match()
     n_match = end_match()
     data_users_mail(user, email)
     data_users_game(n_match, win, fail, user)
-    data_match(round, move, user)
+    data_match(round_n, user, match_final)
+    data_round(round_results, move_human)
     # delete_row()
