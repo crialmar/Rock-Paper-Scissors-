@@ -20,11 +20,11 @@
   [X] Preguntar si nueva partida
 
 - Report (SQLite)
-  [] Nº Partidas jugadas
-  [] Nº victorias
-  [] Nº derrotas
-  [] Winrate %
-  [] Mejor y peor jugada
+  [X] Nº Partidas jugadas
+  [X] Nº victorias
+  [X] Nº derrotas
+  [X] Winrate %
+  [X] Mejor y peor jugada-----> con %
   [] Enviar por correo ----> smtplib
 
 - Extra

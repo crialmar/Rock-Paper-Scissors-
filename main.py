@@ -1,6 +1,7 @@
 '''Imports'''
 import sqlite3
 import random
+import smtplib
 
 
 def create_db():
@@ -65,7 +66,7 @@ def create_table_round():
     conn.close()
 
 
-def start_match():
+def start_match(): #TODO REGISTER
     '''Start of the game'''
     #? 1. INTRODUCCIÓN AL JUEGO
     print("\n******* Rock Paper Scissors *******\n")
@@ -131,7 +132,7 @@ def match(user):
     return win, fail, round_n, round_results, move_human, match_final
 
 
-def data_match(round, user, match_final):
+def data_match(round_n, user, match_final):
     '''Insert data to db match table---> user_id, rounds, results, move'''
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
@@ -146,13 +147,14 @@ def data_match(round, user, match_final):
             cursor.execute('''
                        INSERT INTO match (user_id, rounds, results) 
                        VALUES (?, ?, ?) 
-                       ''', (user_id, round, fin))
+                       ''', (user_id, round_n, fin))
         conn.commit()
         print('Matchs data register correctly')
     except sqlite3.IntegrityError:
         print ('There was an error saving the matchs data')
     finally:
         conn.close()
+    return user_id
 
 
 def get_id_match():
@@ -268,39 +270,105 @@ def delete_row():
     conn.close()
 
 
-def get_data_db(query, params=()):
-    '''Fetch data form db on the provided query and params'''
-    conn = sqlite3.connect("rps.db")
-    cursor = conn.cursor()
-    cursor.execute(query, params)
-    data = cursor.fetchall()
-    conn.close()
-    return data
-
-
-def get_match_total(): #TODO REVISAR ESTO 
+def get_match_total(user, n_match):
     '''Get all match'''
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     try:
         cursor.execute('''SELECT id FROM users WHERE user=?''', (user,))
-        user_id_result = cursor.fetchone
+        user_id_result = cursor.fetchone()[0]
         if user_id_result is None:
-            print('na de na')
+            print('NO USER')
             return None
-        cursor.execute('''SELECT * FROM users WHERE n_match=?''', (n_match,))
-        matches = cursor.fetchall()
-        print(f'{user}s matches').upper()
-        for match in matches:
-            print(match)
-        return matches
-        
+        cursor.execute('''SELECT COUNT(*) FROM match WHERE user_id=?''', (n_match,))
+        match_count = cursor.fetchone()[0]
+        print(f'{user}s matches: {match_count}')
+        return match_count
     except sqlite3.IntegrityError:
         print ('pos no lo conseguiste')
     finally:
         conn.close()
-    conn.close()
 
+
+def get_win_fail(user_id):
+    '''Get number of matches won and failed'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''SELECT COUNT(*) FROM match WHERE user_id=? AND results="Win"''', (user_id,))
+        win_count = cursor.fetchone()[0]
+        print(f'Win {win_count} veces')
+        cursor.execute('''SELECT COUNT(*) FROM match WHERE user_id=? AND results="Fail"''', (user_id,))
+        fail_count = cursor.fetchone()[0]
+        print(f'Fail {fail_count} veces')
+        return win_count, fail_count
+    except sqlite3.IntegrityError:
+        print ('pos no lo conseguiste')
+    finally:
+        conn.close()
+
+
+def calculate_winrate(match_count, win_count):
+    '''Function to calculate the winrate'''
+    win_count_int = win_count[0]
+    winrate = round((win_count_int/match_count)*100)
+    print(f'Your winrate is: {winrate}%')
+
+
+def get_best_move(user_id, match_count):
+    '''Get the best move'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''SELECT move, COUNT(move) AS win_count
+                          FROM round 
+                          WHERE match_id IN (SELECT id FROM match WHERE user_id=? AND results="Win")
+                          GROUP BY move
+                          ORDER BY win_count DESC
+                          LIMIT 1''', (user_id,))
+        best_winning_move = cursor.fetchone()
+        if best_winning_move:
+            winrate_best_move = round((best_winning_move[1]/match_count)*100)
+            print(f'La jugada con más victorias es {best_winning_move[0]} con un winrate de {winrate_best_move}% ({best_winning_move[1]} victorias).')
+            return best_winning_move[0]
+        else:
+            print("No se encontraron jugadas ganadoras y perdedoras para el usuario.")
+    except sqlite3.IntegrityError:
+        print("Error al obtener la mejor y peor jugada ganadora.")
+    finally:
+        conn.close()
+
+
+def get_worst_move(user_id, match_count):
+    '''Get the worst move'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''SELECT move, COUNT(move) AS win_count
+                          FROM round 
+                          WHERE match_id IN (SELECT id FROM match WHERE user_id=? AND results="Fail")
+                          GROUP BY move
+                          ORDER BY win_count DESC
+                          LIMIT 1''', (user_id,))
+        worst_winning_move = cursor.fetchone()
+        if worst_winning_move:
+            winrate_worst_move = round((worst_winning_move[1]/match_count)*100)
+            print(f'La jugada con más fail es {worst_winning_move[0]} con un winrate de {winrate_worst_move}% ({worst_winning_move[1]} fail).')
+            return worst_winning_move[0]
+        else:
+            print("No se encontraron jugadas ganadoras y perdedoras para el usuario.")
+    except sqlite3.IntegrityError:
+        print("Error al obtener la mejor y peor jugada ganadora.")
+    finally:
+        conn.close()
+
+
+def send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, worst_winning_move): #TODO 
+    '''Send email----> match'''
+    sender = 'crythonjs@gmail.com'
+    sPass = 'passrps1'
+    addressee = {email}
+    
 
 if __name__ == "__main__":
     #create_db()
@@ -309,7 +377,15 @@ if __name__ == "__main__":
     #create_table_round()
     user, email = start_match()
     win, fail, round_n, round_results, move_human, match_final = match(user)
+    user_id = data_match(round_n, user, match_final)
     n_match = end_match(user)
+    match_count= get_match_total(user, n_match)
+    win_count = get_win_fail(user_id)
     data_users_mail(user, email)
     data_users_game(n_match, win, fail, user)
+    get_match_total(user, n_match)
+    get_win_fail(user_id)
+    calculate_winrate(match_count, win_count)
+    get_best_move(user_id, match_count)
+    get_worst_move(user_id, match_count)
     # delete_row()
