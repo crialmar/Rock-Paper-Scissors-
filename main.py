@@ -1,7 +1,9 @@
 '''Imports'''
 import sqlite3
+import math
 import random
 import smtplib
+from email.mime.text import MIMEText
 
 
 def create_db():
@@ -310,9 +312,10 @@ def get_win_fail(user_id):
 
 def calculate_winrate(match_count, win_count):
     '''Function to calculate the winrate'''
-    win_count_int = win_count[0]
-    winrate = round((win_count_int/match_count)*100)
+    # win_count_int = win_count[0]
+    winrate = round((win_count/match_count)*100)
     print(f'Your winrate is: {winrate}%')
+    return winrate
 
 
 def get_best_move(user_id, match_count):
@@ -330,7 +333,7 @@ def get_best_move(user_id, match_count):
         if best_winning_move:
             winrate_best_move = round((best_winning_move[1]/match_count)*100)
             print(f'La jugada con más victorias es {best_winning_move[0]} con un winrate de {winrate_best_move}% ({best_winning_move[1]} victorias).')
-            return best_winning_move[0]
+            return best_winning_move
         else:
             print("No se encontraron jugadas ganadoras y perdedoras para el usuario.")
     except sqlite3.IntegrityError:
@@ -352,9 +355,9 @@ def get_worst_move(user_id, match_count):
                           LIMIT 1''', (user_id,))
         worst_winning_move = cursor.fetchone()
         if worst_winning_move:
-            winrate_worst_move = round((worst_winning_move[1]/match_count)*100)
+            winrate_worst_move = math.floor((worst_winning_move[1]/match_count)*100)
             print(f'La jugada con más fail es {worst_winning_move[0]} con un winrate de {winrate_worst_move}% ({worst_winning_move[1]} fail).')
-            return worst_winning_move[0]
+            return worst_winning_move
         else:
             print("No se encontraron jugadas ganadoras y perdedoras para el usuario.")
     except sqlite3.IntegrityError:
@@ -363,12 +366,62 @@ def get_worst_move(user_id, match_count):
         conn.close()
 
 
-def send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, worst_winning_move): #TODO 
+def send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, worst_winning_move):
     '''Send email----> match'''
-    sender = 'crythonjs@gmail.com'
-    sPass = 'passrps1'
-    addressee = {email}
+    HOST = "smtp.gmail.com"
+    PORT = 587
+
+    from_email = 'crythonjs@gmail.com'
+    sPass = 'bnwwudvlhwexxcmo'
+    to_email = {email}
+
+    if best_winning_move and len(best_winning_move) >= 2:
+        best_winning_text = f"{best_winning_move[0]} with a {best_winning_move[1]}% success rate"
+    else:
+        best_winning_text = 'Data not available'
+
+    if worst_winning_move and len(worst_winning_move) >= 2:
+        worst_winning_text = f"{worst_winning_move[0]} with a {worst_winning_move[1]}% failure rate"
+    else:
+        worst_winning_text = 'Data not available'
+
+    message_content = f"""
+    Hi! Thank you for playing Rock, Paper, Scissors!
+
+    We present you the statistics of your games:
+    - Number of games played: {match_count}
+    - Number of victories: {win_count}
+    - Number of defeats: {fail_count}
+    - Winrate: {winrate}%
+    - Best move: {best_winning_text}
+    - Worst move: {worst_winning_text}
     
+    See you soon!!
+    """
+    
+    msg = MIMEText(message_content, "plain", "utf-8")
+    msg['Subject'] = "Your Rock, Paper, Scissors Game Stats" 
+    msg['From'] = from_email
+    msg['To'] = to_email
+    
+    try:
+        smtp = smtplib.SMTP(HOST, PORT)
+
+        status_code, res = smtp.ehlo()
+        print(f'Echoing the server: {status_code} {res}')
+
+        status_code, res = smtp.starttls()
+        print(f'Starting TLS connexion: {status_code} {res}')
+
+        status_code, res = smtp.login(from_email, sPass)
+        print(f'Logging in: {status_code} {res}')
+
+        smtp.sendmail(from_email, to_email, message_content)
+    except Exception as e:
+        print(f'Error sending email: {e}')
+    finally:
+        smtp.quit()
+
 
 if __name__ == "__main__":
     #create_db()
@@ -380,7 +433,10 @@ if __name__ == "__main__":
     user_id = data_match(round_n, user, match_final)
     n_match = end_match(user)
     match_count= get_match_total(user, n_match)
-    win_count = get_win_fail(user_id)
+    win_count, fail_count = get_win_fail(user_id)
+    winrate = calculate_winrate(match_count, win_count)
+    best_winning_move = get_best_move(user_id, match_count)
+    worst_winning_move = get_worst_move(user_id, match_count)
     data_users_mail(user, email)
     data_users_game(n_match, win, fail, user)
     get_match_total(user, n_match)
@@ -388,4 +444,5 @@ if __name__ == "__main__":
     calculate_winrate(match_count, win_count)
     get_best_move(user_id, match_count)
     get_worst_move(user_id, match_count)
+    send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, worst_winning_move)
     # delete_row()
