@@ -147,7 +147,6 @@ def match(user):
         round_n += 1
 
     print("\n******* RESULTS *******\n")
-    print(f'The results are {round_results}. Your score is {score}')
 
     win = 0
     fail = 0
