@@ -25,8 +25,5 @@
   [X] Nº derrotas
   [X] Winrate %
   [X] Mejor y peor jugada-----> con %
-  [] Enviar por correo ----> smtplib
+  [X] Enviar por correo ----> smtplib
 
-- Extra
-  [] Registro
-  [] Login
