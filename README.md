@@ -27,3 +27,7 @@
   [X] Mejor y peor jugada-----> con %
   [X] Enviar por correo ----> smtplib
 
+- Extras:
+  [] Register
+  [] Login
+
