@@ -3,7 +3,7 @@ import sqlite3
 import math
 import random
 import smtplib
-from email.mime.text import MIMEText
+from email.message import EmailMessage
 
 
 def create_db():
@@ -22,9 +22,9 @@ def create_table_user():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user text NOT NULL UNIQUE,
             email text NOT NULL UNIQUE,
-            n_match integer,
-            win integer,
-            fail integer
+            n_match INTENGER DEFAULT 0,
+            win INTENGER DEFAULT 0,
+            fail INTENGER DEFAULT 0
         )"""
     )
     conn.commit()
@@ -41,7 +41,6 @@ def create_table_match():
             user_id integer,
             rounds integer,
             results text,
-            move text,
             date DATE DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES user(id)
         )"""
@@ -70,23 +69,53 @@ def create_table_round():
 
 def start_match(): #TODO REGISTER
     '''Start of the game'''
-    #? 1. INTRODUCCIÓN AL JUEGO
     print("\n******* Rock Paper Scissors *******\n")
     user = input("Hi! What's your name? ").lower()
     email = input("Please, tell us your email: ")
+
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE user = ? AND email = ?", (user, email))
+    existing_user = cursor.fetchone()
+
+    if existing_user:
+        print(f"Welcome back, {user}!")
+    else:
+        data_users_mail(user, email)
+        print(f"Welcome, {user}! Your registration was successful.")
+
+    conn.close()
     return user, email
+
+
+def data_users_mail(user, email):
+    '''Register user and email data to db users table'''
+    conn = sqlite3.connect("rps.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+                       INSERT INTO users (user, email) 
+                       VALUES (?, ?) 
+                       ''', (user, email))
+        conn.commit()
+        print('User and email register correctly')
+    except sqlite3.IntegrityError:
+        print ('Error: user or mail not found')
+        return
+    finally:
+        conn.close()
 
 
 def match(user):
     '''Logic for one match (3 rounds)'''
-    #? 2. ELECCIÓN DEL USUARIO
     print("\nGreat! You'll be playing against the machine")
-    options = ['R', 'P', 'S'] #* Establecemos las opciones que tiene la máquina
+    options = ['R', 'P', 'S']
     round_results = []
     move_human = []
     match_final = []
     score = 0
     round_n = 0
+
     for _ in range (3):
         print('***** FIGHT *****\n')
         while True:
@@ -97,9 +126,9 @@ def match(user):
                 print("That is not an option. Try again")
             else:
                 break
-        #? 3. ELECCIÓN DE LA MÁQUINA
-        computer_choice = random.choice(options) #*Randomizamos la elección de la máquina
-        #? 4. EL COMBATE
+
+        computer_choice = random.choice(options)
+
         if move == computer_choice:
             print(f'{move} vs {computer_choice}. In case of a tie, the machine wins\n')
             result = 'Fail '
@@ -112,14 +141,17 @@ def match(user):
         else:
             print(f'{move} vs {computer_choice}. Machine wins\n')
             result = 'Fail '
+
         round_results.append(result)
         move_human.append(move)
-        print(move_human)
         round_n += 1
+
     print("\n******* RESULTS *******\n")
     print(f'The results are {round_results}. Your score is {score}')
+
     win = 0
     fail = 0
+
     if score >= 2:
         win += 1
         match_final.append('Win')
@@ -128,10 +160,13 @@ def match(user):
         fail += 1
         match_final.append('Fail')
         print("The machine has won\n")
-    data_match(round_n, user, match_final)
-    get_id_match()
-    data_round(round_results, move_human)
-    return win, fail, round_n, round_results, move_human, match_final
+
+    user_id, match_id = data_match(round_n, user, match_final)
+    if match_id is not None:
+        data_round(match_id, round_results, move_human)
+    else:
+        print('Error: failed to record match data')
+    return win, fail, round_n, round_results, move_human, match_final, user_id
 
 
 def data_match(round_n, user, match_final):
@@ -150,13 +185,13 @@ def data_match(round_n, user, match_final):
                        INSERT INTO match (user_id, rounds, results) 
                        VALUES (?, ?, ?) 
                        ''', (user_id, round_n, fin))
+        match_id = cursor.lastrowid
         conn.commit()
-        print('Matchs data register correctly')
     except sqlite3.IntegrityError:
         print ('There was an error saving the matchs data')
     finally:
         conn.close()
-    return user_id
+    return user_id, match_id
 
 
 def get_id_match():
@@ -169,7 +204,6 @@ def get_id_match():
         if match_id_ is None:
             print("Match not found")
             conn.commit()
-            print(f'SOY EL ID DEL MATCH {match_id_}')
         else:
             match_id_ = match_id_[0]
         return match_id_
@@ -179,12 +213,11 @@ def get_id_match():
         conn.close()
 
 
-def data_round(round_results, move_human):
+def data_round(match_id, round_results, move_human):
     '''Insert data to db round table---> match_id, results, move'''
-    match_id = get_id_match()
+    #match_id = get_id_match()
     if match_id is None:
-        print('Error: no match created or obtained')
-    print(f'Soy el gran y único MATCH ID {match_id}')
+        print('Error: no match ID provided')
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     try:
@@ -196,7 +229,7 @@ def data_round(round_results, move_human):
             conn.commit()
             print('Round data register correctly')
     except sqlite3.IntegrityError:
-        print ('There was an error saving the round data')
+        print ('Error saving the round data')
     finally:
         conn.close()
 
@@ -211,33 +244,15 @@ def end_match(user):
             if other_match == 'Y':
                 # total_round = round + {round}
                 n_match += 1
-                
                 match(user)
         except ValueError:
             print("That is not an option. Try again")
         else:
             if other_match == 'N':
                 n_match += 1
-                print('Thanks')
+                print('Thanks for playing!!')
                 break
     return n_match
-
-
-def data_users_mail(user, email):
-    '''Insert user and email data to db users table'''
-    conn = sqlite3.connect("rps.db")
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-                       INSERT INTO users (user, email) 
-                       VALUES (?, ?) 
-                       ''', (user, email))
-        conn.commit()
-        print('User and email register correctly')
-    except sqlite3.IntegrityError:
-        print (f'Hi {user}')
-    finally:
-        conn.close()
 
 
 def data_users_game(n_match, win, fail, user):
@@ -254,40 +269,27 @@ def data_users_game(n_match, win, fail, user):
                       WHERE user = ?
                       ''', (n_match, win, fail, user))
         conn.commit()
-        print('Data saved correctly')
     except sqlite3.IntegrityError:
         print ('There was an error saving the data')
     finally:
         conn.close()
 
 
-def delete_row():
-    '''Pa eliminar weas'''
-    conn = sqlite3.connect("rps.db")
-    cursor = conn.cursor()
-    cursor.execute('''DELETE FROM match
-                   WHERE id=1''')
-    # cursor.execute('''DROP TABLE IF EXISTS match_extended''')-----> guardar comando
-    conn.commit()
-    conn.close()
-
-
-def get_match_total(user, n_match):
+def get_match_total(user):
     '''Get all match'''
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     try:
         cursor.execute('''SELECT id FROM users WHERE user=?''', (user,))
-        user_id_result = cursor.fetchone()[0]
+        user_id_result = cursor.fetchone()
         if user_id_result is None:
             print('NO USER')
             return None
-        cursor.execute('''SELECT COUNT(*) FROM match WHERE user_id=?''', (n_match,))
+        cursor.execute('''SELECT n_match FROM users WHERE user=?''', (user,))
         match_count = cursor.fetchone()[0]
-        print(f'{user}s matches: {match_count}')
         return match_count
     except sqlite3.IntegrityError:
-        print ('pos no lo conseguiste')
+        print ('The total number of matches could not be obtained')
     finally:
         conn.close()
 
@@ -299,22 +301,18 @@ def get_win_fail(user_id):
     try:
         cursor.execute('''SELECT COUNT(*) FROM match WHERE user_id=? AND results="Win"''', (user_id,))
         win_count = cursor.fetchone()[0]
-        print(f'Win {win_count} veces')
         cursor.execute('''SELECT COUNT(*) FROM match WHERE user_id=? AND results="Fail"''', (user_id,))
         fail_count = cursor.fetchone()[0]
-        print(f'Fail {fail_count} veces')
         return win_count, fail_count
     except sqlite3.IntegrityError:
-        print ('pos no lo conseguiste')
+        print ('The total number of matches won and lost could not be obtained')
     finally:
         conn.close()
 
 
 def calculate_winrate(match_count, win_count):
     '''Function to calculate the winrate'''
-    # win_count_int = win_count[0]
     winrate = round((win_count/match_count)*100)
-    print(f'Your winrate is: {winrate}%')
     return winrate
 
 
@@ -331,13 +329,13 @@ def get_best_move(user_id, match_count):
                           LIMIT 1''', (user_id,))
         best_winning_move = cursor.fetchone()
         if best_winning_move:
-            winrate_best_move = round((best_winning_move[1]/match_count)*100)
-            print(f'La jugada con más victorias es {best_winning_move[0]} con un winrate de {winrate_best_move}% ({best_winning_move[1]} victorias).')
-            return best_winning_move
+            winrate_best_move = math.floor((best_winning_move[1]/match_count)*100)
+            return best_winning_move, winrate_best_move
         else:
-            print("No se encontraron jugadas ganadoras y perdedoras para el usuario.")
+            print("No winning plays were found for the user")
+            return None, None
     except sqlite3.IntegrityError:
-        print("Error al obtener la mejor y peor jugada ganadora.")
+        print("Error in obtaining the best and worst winning play")
     finally:
         conn.close()
 
@@ -347,26 +345,25 @@ def get_worst_move(user_id, match_count):
     conn = sqlite3.connect("rps.db")
     cursor = conn.cursor()
     try:
-        cursor.execute('''SELECT move, COUNT(move) AS win_count
+        cursor.execute('''SELECT move, COUNT(move) AS fail_count
                           FROM round 
                           WHERE match_id IN (SELECT id FROM match WHERE user_id=? AND results="Fail")
                           GROUP BY move
-                          ORDER BY win_count DESC
+                          ORDER BY fail_count DESC
                           LIMIT 1''', (user_id,))
         worst_winning_move = cursor.fetchone()
         if worst_winning_move:
             winrate_worst_move = math.floor((worst_winning_move[1]/match_count)*100)
-            print(f'La jugada con más fail es {worst_winning_move[0]} con un winrate de {winrate_worst_move}% ({worst_winning_move[1]} fail).')
-            return worst_winning_move
+            return worst_winning_move, winrate_worst_move
         else:
-            print("No se encontraron jugadas ganadoras y perdedoras para el usuario.")
+            print("No failing moves found for the user")
     except sqlite3.IntegrityError:
-        print("Error al obtener la mejor y peor jugada ganadora.")
+        print("Error in obtaining the best and worst winning play")
     finally:
         conn.close()
 
 
-def send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, worst_winning_move):
+def send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, winrate_best_move, worst_winning_move, winrate_worst_move):
     '''Send email----> match'''
     HOST = "smtp.gmail.com"
     PORT = 587
@@ -376,12 +373,12 @@ def send_email(email, match_count, win_count, fail_count, winrate, best_winning_
     to_email = {email}
 
     if best_winning_move and len(best_winning_move) >= 2:
-        best_winning_text = f"{best_winning_move[0]} with a {best_winning_move[1]}% success rate"
+        best_winning_text = f"{best_winning_move[0]} with a {winrate_best_move}% success rate"
     else:
         best_winning_text = 'Data not available'
 
     if worst_winning_move and len(worst_winning_move) >= 2:
-        worst_winning_text = f"{worst_winning_move[0]} with a {worst_winning_move[1]}% failure rate"
+        worst_winning_text = f"{worst_winning_move[0]} with a {winrate_worst_move}% failure rate"
     else:
         worst_winning_text = 'Data not available'
 
@@ -398,25 +395,20 @@ def send_email(email, match_count, win_count, fail_count, winrate, best_winning_
     
     See you soon!!
     """
-    
-    msg = MIMEText(message_content, "plain", "utf-8")
-    msg['Subject'] = "Your Rock, Paper, Scissors Game Stats" 
+
+    msg = EmailMessage()
+    msg['Subject'] = "Your Rock, Paper, Scissors Game Stats"
     msg['From'] = from_email
     msg['To'] = to_email
-    
+    msg.set_content(message_content)
+
     try:
         smtp = smtplib.SMTP(HOST, PORT)
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.login(from_email, sPass)
+        smtp.send_message(msg)
 
-        status_code, res = smtp.ehlo()
-        print(f'Echoing the server: {status_code} {res}')
-
-        status_code, res = smtp.starttls()
-        print(f'Starting TLS connexion: {status_code} {res}')
-
-        status_code, res = smtp.login(from_email, sPass)
-        print(f'Logging in: {status_code} {res}')
-
-        smtp.sendmail(from_email, to_email, message_content)
     except Exception as e:
         print(f'Error sending email: {e}')
     finally:
@@ -424,25 +416,17 @@ def send_email(email, match_count, win_count, fail_count, winrate, best_winning_
 
 
 if __name__ == "__main__":
-    #create_db()
-    #create_table_user()
-    #create_table_match()
-    #create_table_round()
+    # create_db()
+    # create_table_user()
+    # create_table_match()
+    # create_table_round()
     user, email = start_match()
-    win, fail, round_n, round_results, move_human, match_final = match(user)
-    user_id = data_match(round_n, user, match_final)
+    win, fail, round_n, round_results, move_human, match_final, user_id = match(user)
     n_match = end_match(user)
-    match_count= get_match_total(user, n_match)
+    data_users_game(n_match, win, fail, user)
+    match_count = get_match_total(user)
     win_count, fail_count = get_win_fail(user_id)
     winrate = calculate_winrate(match_count, win_count)
-    best_winning_move = get_best_move(user_id, match_count)
-    worst_winning_move = get_worst_move(user_id, match_count)
-    data_users_mail(user, email)
-    data_users_game(n_match, win, fail, user)
-    get_match_total(user, n_match)
-    get_win_fail(user_id)
-    calculate_winrate(match_count, win_count)
-    get_best_move(user_id, match_count)
-    get_worst_move(user_id, match_count)
-    send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, worst_winning_move)
-    # delete_row()
+    best_winning_move, winrate_best_move = get_best_move(user_id, match_count)
+    worst_winning_move, winrate_worst_move = get_worst_move(user_id, match_count)
+    send_email(email, match_count, win_count, fail_count, winrate, best_winning_move, winrate_best_move, worst_winning_move, winrate_worst_move)
