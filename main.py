@@ -367,8 +367,8 @@ def send_email(email, match_count, win_count, fail_count, winrate, best_winning_
     HOST = "smtp.gmail.com"
     PORT = 587
 
-    from_email = 'crythonjs@gmail.com'
-    sPass = 'bnwwudvlhwexxcmo'
+    from_email = 'YOUR EMAIL'
+    sPass = 'YOUR PASS'
     to_email = {email}
 
     if best_winning_move and len(best_winning_move) >= 2:
